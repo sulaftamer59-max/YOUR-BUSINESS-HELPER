@@ -1,0 +1,103 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+import numpy as np
+import openai
+
+# ====== إعداد مفتاح OpenAI ======
+openai.api_key = 'YOUR_OPENAI_API_KEY'
+
+# ====== اختيار اللغة ======
+language = st.sidebar.selectbox('اختر اللغة / Select Language', ['العربية', 'English'])
+
+# ====== واجهة المستخدم ======
+if language == 'العربية':
+    st.set_page_config(page_title='منصة تحليلات الأعمال', layout='wide')
+    st.title('منصة تحليلات الأعمال')
+    st.write('منصة متكاملة لتحليلات الأعمال، التوقعات المستقبلية، والشات بوت الذكي')
+    upload_text = 'اختر ملف CSV أو Excel'
+    preview_text = 'معاينة البيانات'
+    descriptive_text = 'التحليلات الوصفية'
+    charts_text = 'الرسوم البيانية'
+    prediction_text = 'توقع المبيعات المستقبلية'
+    chatbot_text = 'شات بوت تفاعلي'
+    question_text = 'اكتب سؤالك عن البيانات أو اطلب نصائح لتحسين الأعمال:'
+    info_text = 'يرجى رفع ملف بيانات CSV أو Excel لبدء التحليلات.'
+else:
+    st.set_page_config(page_title='Smart Analytics Hub', layout='wide')
+    st.title('Smart Analytics Hub')
+    st.write('Integrated platform for business analytics, predictive analysis, and smart chatbot')
+    upload_text = 'Upload CSV or Excel file'
+    preview_text = 'Data Preview'
+    descriptive_text = 'Descriptive Analysis'
+    charts_text = 'Charts'
+    prediction_text = 'Future Sales Prediction'
+    chatbot_text = 'Interactive Chatbot'
+    question_text = 'Ask a question about the data or request business advice:'
+    info_text = 'Please upload a CSV or Excel file to start analysis.'
+
+# ====== رفع البيانات ======
+st.sidebar.header(upload_text)
+data_file = st.sidebar.file_uploader(upload_text, type=['csv','xlsx'])
+
+if data_file:
+    if data_file.name.endswith('.csv'):
+        df = pd.read_csv(data_file)
+    else:
+        df = pd.read_excel(data_file)
+
+    st.subheader(preview_text)
+    st.dataframe(df.head())
+
+    # ====== التحليلات الوصفية ======
+    st.subheader(descriptive_text)
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+    for col in numeric_cols:
+        st.write(f'**{col}**')
+        st.write(df[col].describe())
+
+    # ====== الرسوم البيانية التفاعلية ======
+    st.subheader(charts_text)
+    col_x = st.selectbox('X Axis / المحور X', numeric_cols)
+    col_y = st.selectbox('Y Axis / المحور Y', numeric_cols)
+    fig = px.scatter(df, x=col_x, y=col_y, title=f'{col_x} vs {col_y}')
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ====== نموذج التنبؤ ======
+    st.subheader(prediction_text)
+    target_col = st.selectbox('Choose target column / اختر العمود للتوقع', numeric_cols, index=0)
+    features = [col for col in numeric_cols if col != target_col]
+
+    if features:
+        X = df[features]
+        y = df[target_col]
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        model = LinearRegression()
+        model.fit(X_train, y_train)
+        predictions = model.predict(X_test)
+
+        st.write('First 10 predictions / أول 10 توقعات:', predictions[:10])
+        fig_pred = px.line(x=range(len(y_test)), y=[y_test.tolist(), predictions.tolist()], labels={'x':'Sample / العينة','y':'Value / القيمة'}, title='Actual vs Predictions / القيم الحقيقية مقابل التوقعات')
+        fig_pred.data[0].name = 'Actual / القيم الحقيقية'
+        fig_pred.data[1].name = 'Prediction / التوقع'
+        st.plotly_chart(fig_pred, use_container_width=True)
+
+    # ====== شات بوت تفاعلي ======
+    st.subheader(chatbot_text)
+    user_question = st.text_input(question_text)
+
+    if user_question:
+        prompt = f"أنت مساعد ذكي لتحليلات الأعمال. هذه البيانات: {df.head().to_dict()}. الآن أجب على السؤال التالي بطريقة واضحة وعملية: {user_question}"
+        response = openai.Completion.create(
+            engine='text-davinci-003',
+            prompt=prompt,
+            max_tokens=300,
+            temperature=0.7
+        )
+        answer = response['choices'][0]['text']
+        st.write('💡 Chatbot / شات بوت:', answer)
+
+else:
+    st.info(info_text)
